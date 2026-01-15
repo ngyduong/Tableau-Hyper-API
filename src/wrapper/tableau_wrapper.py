@@ -5,7 +5,7 @@ from typing import Any, Callable, List
 
 import tableauserverclient as TSC
 
-from wrapper.config import ConfigWrapper
+from src.wrapper.config import ConfigWrapper
 
 
 class TableauClient:

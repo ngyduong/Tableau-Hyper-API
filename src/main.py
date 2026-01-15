@@ -7,14 +7,18 @@ The core module of the project
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from typing import Callable, Dict
 
-from src.scripts.hyper_api_create_extract import main as run_hyper_api_create_extract
-from wrapper.config import ConfigWrapper
-from wrapper.tableau_wrapper import TableauClient
+from src.scripts.hyper_api_create_extract import \
+    main as run_hyper_api_create_extract
+from src.utils.logging_setup import setup_logging
+from src.wrapper.config import ConfigWrapper
+from src.wrapper.tableau_wrapper import TableauClient
 
 ScriptFn = Callable[[TableauClient, ConfigWrapper, argparse.Namespace], None]
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -24,8 +28,6 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         choices=[
             "hyper_api_create_extract",
-            "hyper_api_create_hyper",
-            "hyper_api_publish_hyper",
         ],
         help="Which script to run",
     )
@@ -34,6 +36,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    setup_logging(app_name="tableau-cli")  # reads LOG_LEVEL env by default
+    logger.info("Starting CLI")
     parser = build_parser()
     args = parser.parse_args()
 
