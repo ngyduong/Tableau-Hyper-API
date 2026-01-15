@@ -8,6 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.14"
 tableauserverclient = "^0.38"
+pandas = "^2.3.3"
 
 
 [build-system]

@@ -11,8 +11,7 @@ import logging
 import sys
 from typing import Callable, Dict
 
-from src.scripts.hyper_api_create_extract import \
-    main as run_hyper_api_create_extract
+from src.scripts.hyper_api.generate_hyper import main as run_generate_hyper
 from src.utils.logging_setup import setup_logging
 from src.wrapper.config import ConfigWrapper
 from src.wrapper.tableau_wrapper import TableauClient
@@ -27,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--script",
         required=True,
         choices=[
-            "hyper_api_create_extract",
+            "generate_hyper",
         ],
         help="Which script to run",
     )
@@ -45,7 +44,7 @@ def main() -> int:
     cfg = ConfigWrapper()
 
     scripts: Dict[str, ScriptFn] = {
-        "hyper_api_create_extract": run_hyper_api_create_extract,
+        "generate_hyper": run_generate_hyper,
     }
 
     script_fn = scripts.get(args.script)
