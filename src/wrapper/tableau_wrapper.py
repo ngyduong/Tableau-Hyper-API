@@ -77,24 +77,6 @@ class TableauClient:
 
     # ---------- Common helpers ----------
 
-    def projects(self):
-        return self.list_all(self.server.projects.get)
-
-    def workbooks(self):
-        return self.list_all(self.server.workbooks.get)
-
-    def datasources(self):
-        return self.list_all(self.server.datasources.get)
-
-    def refresh_datasource(self, datasource_id: str):
-        return self.server.datasources.refresh(datasource_id)
-
-    def wait_for_job(self, job_id: str, timeout: int = 900):
-        start = time.time()
-        while True:
-            job = self.server.jobs.get_by_id(job_id)
-            if job.completed_at:
-                return job
-            if time.time() - start > timeout:
-                raise TimeoutError(f"Job {job_id} timed out")
-            time.sleep(3)
+    def publish_datasources(self, server, filepath, project_luid, mode):
+        new_datasource = TSC.DatasourceItem(project_luid)
+        server.datasources.publish(new_datasource, file=filepath, mode=mode)

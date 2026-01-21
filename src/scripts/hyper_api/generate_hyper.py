@@ -5,8 +5,13 @@ import logging
 from pathlib import Path
 
 import pandas as pd
-from tableauhyperapi import (Connection, CreateMode, HyperProcess, Telemetry,
-                             escape_string_literal)
+from tableauhyperapi import (
+    Connection,
+    CreateMode,
+    HyperProcess,
+    Telemetry,
+    escape_string_literal,
+)
 
 from src.utils.log_duration import log_duration
 from src.wrapper.config import ConfigWrapper
@@ -100,9 +105,6 @@ def main(tsc: TableauClient, cfg: ConfigWrapper, args: argparse.Namespace) -> No
                         connection.execute_command(
                             f"INSERT INTO {schema_table} "
                             f"(SELECT * FROM external({p_sql}, FORMAT => 'parquet'))"
-                        )
-                        logger.info(
-                            "Parquet file appended successfully: %s", parquet_name
                         )
 
                     except Exception:

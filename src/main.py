@@ -12,6 +12,7 @@ import sys
 from typing import Callable, Dict
 
 from src.scripts.hyper_api.generate_hyper import main as main_generate_hyper
+from src.scripts.hyper_api.publish_hyper import main as main_publish_hyper
 from src.utils.logging_setup import setup_logging
 from src.wrapper.config import ConfigWrapper
 from src.wrapper.tableau_wrapper import TableauClient
@@ -25,9 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--script",
         required=True,
-        choices=[
-            "generate_hyper",
-        ],
+        choices=["generate_hyper", "publish_hyper"],
         help="Which script to run",
     )
 
@@ -45,6 +44,7 @@ def main() -> int:
 
     scripts: Dict[str, ScriptFn] = {
         "generate_hyper": main_generate_hyper,
+        "publish_hyper": main_publish_hyper,
     }
 
     script_fn = scripts.get(args.script)
