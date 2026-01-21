@@ -15,7 +15,6 @@ from src.scripts.hyper_api.generate_hyper import main as main_generate_hyper
 from src.scripts.hyper_api.publish_hyper import main as main_publish_hyper
 from src.utils.logging_setup import setup_logging
 from src.wrapper.config import ConfigWrapper
-from src.wrapper.tableau_wrapper import TableauClient
 
 ScriptFn = Callable[[ConfigWrapper, argparse.Namespace], None]
 logger = logging.getLogger(__name__)

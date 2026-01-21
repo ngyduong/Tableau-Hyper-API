@@ -10,7 +10,7 @@ from src.wrapper.tableau_wrapper import TableauClient
 logger = logging.getLogger(__name__)
 
 
-def main(tsc: TableauClient, cfg: ConfigWrapper, args: argparse.Namespace) -> None:
+def main(cfg: ConfigWrapper, args: argparse.Namespace) -> None:
     """
     Publish a Hyper file to Tableau Cloud / Tableau Server.
 
@@ -35,12 +35,13 @@ def main(tsc: TableauClient, cfg: ConfigWrapper, args: argparse.Namespace) -> No
 
     # Measure and log the duration of the publish step
     with log_duration("publish_hyper"):
-        tsc.publish_datasources(
-            server=tsc.server,
-            filepath=hyper_filepath,
-            project_luid=project_luid,
-            mode=mode,
-        )
+        with TableauClient() as tsc:
+            tsc.publish_datasources(
+                server=tsc.server,
+                filepath=hyper_filepath,
+                project_luid=project_luid,
+                mode=mode,
+            )
 
     # Log the successful end of the script
     logger.info("Script finished: publish_hyper")
