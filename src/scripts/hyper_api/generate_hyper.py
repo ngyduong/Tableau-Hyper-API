@@ -5,13 +5,8 @@ import logging
 from pathlib import Path
 
 import pandas as pd
-from tableauhyperapi import (
-    Connection,
-    CreateMode,
-    HyperProcess,
-    Telemetry,
-    escape_string_literal,
-)
+from tableauhyperapi import (Connection, CreateMode, HyperProcess, Telemetry,
+                             escape_string_literal)
 
 from src.utils.log_duration import log_duration
 from src.wrapper.config import ConfigWrapper
@@ -96,19 +91,27 @@ def main(tsc: TableauClient, cfg: ConfigWrapper, args: argparse.Namespace) -> No
                 # - If the table does not exist yet: create it from the first parquet
                 # -----------------------------------------------------------------
                 for p in parquet_files:
+
+                    parquet_name = p.name
+                    logger.info("Starting parquet ingestion: %s", parquet_name)
                     p_sql = escape_string_literal(str(p.resolve()))
 
                     try:
-                        # Append data if the table already exists
                         connection.execute_command(
                             f"INSERT INTO {schema_table} "
                             f"(SELECT * FROM external({p_sql}, FORMAT => 'parquet'))"
                         )
+                        logger.info(
+                            "Parquet file appended successfully: %s", parquet_name
+                        )
+
                     except Exception:
-                        # If the table does not exist yet, create it from this parquet
                         connection.execute_command(
                             f"CREATE TABLE {schema_table} AS "
                             f"(SELECT * FROM external({p_sql}, FORMAT => 'parquet'))"
+                        )
+                        logger.info(
+                            "Parquet file used to create Hyper table: %s", parquet_name
                         )
 
     logger.info("Script finished: generate_hyper")
