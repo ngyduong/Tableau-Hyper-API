@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import re
 from pathlib import Path
 
 import pandas as pd
@@ -16,11 +15,12 @@ from tableauhyperapi import (
 
 from src.utils.log_duration import log_duration
 from src.wrapper.config import ConfigWrapper
+from src.wrapper.tableau_wrapper import TableauClient
 
 logger = logging.getLogger(__name__)
 
 
-def main(cfg: ConfigWrapper, args: argparse.Namespace) -> None:
+def main(tsc: TableauClient, cfg: ConfigWrapper, args: argparse.Namespace) -> None:
     """
     Generate a Tableau Hyper file
 
@@ -32,48 +32,44 @@ def main(cfg: ConfigWrapper, args: argparse.Namespace) -> None:
     5. Insert parquet data into the Hyper table
     """
 
-    logger.info(f"Starting script: {args.script}")
+    logger.info("Starting script: generate_hyper")
 
-    with log_duration(args.script):
-
-        # ---------------------------------------------------------------------
-        # Source file definition
-        # In this example, we use a local CSV file from the folder sample_data.
-        # Any file readable by pandas (CSV, JSON, Excel, etc.) could be used here
-        # as long as an absolute or valid relative path is provided.
-        # ---------------------------------------------------------------------
-        csv_filepath = "sample_data/pokemon.csv"
-        csv_filename = re.search(r"(?<=/)[^/]+(?=\.csv$)", csv_filepath).group()
+    with log_duration("generate_hyper"):
 
         # ---------------------------------------------------------------------
         # Create temporary directories used to store parquet files and the hyper file
         # These folders are created if they do not already exist
         # ---------------------------------------------------------------------
-        parquet_dir = Path(f"temp/{csv_filename}/{args.script}/parquet_files")
-        parquet_dir.mkdir(parents=True, exist_ok=True)
-
-        hyper_path = Path(
-            f"temp/{csv_filename}/{args.script}/hyper_file/{csv_filename}.hyper"
-        )
-        hyper_path.parent.mkdir(parents=True, exist_ok=True)
+        # parquet_dir = Path("temp/pokemon/generate_hyper/parquet_files")
+        # parquet_dir.mkdir(parents=True, exist_ok=True)
+        #
+        # hyper_path = Path("temp/pokemon/generate_hyper/hyper_file/pokemon.hyper")
+        # hyper_path.parent.mkdir(parents=True, exist_ok=True)
 
         # ---------------------------------------------------------------------
         # Read the source data into a pandas DataFrame
         # In this example we read a CSV, but any format supported by pandas
         # (JSON, Excel, etc.) could be used here
         # ---------------------------------------------------------------------
-        df = pd.read_csv(csv_filepath, encoding="utf-8")
+        # df = pd.read_csv("sample_data/pokemon.csv", encoding="utf-8")
 
         # Export the DataFrame to parquet.
         # Parquet is used as an intermediate format because it is columnar,
         # fast to read, and natively supported by the Hyper `external()` function.
-        parquet_path = parquet_dir / f"{csv_filename}.parquet"
-        df.to_parquet(parquet_path, index=False)
+        # parquet_path = parquet_dir / "pokemon.parquet"
+        # df.to_parquet(parquet_path, index=False)
 
         # ---------------------------------------------------------------------
         # Collect all parquet files that should be loaded into the Hyper file
         # Files are sorted to ensure deterministic loading order
         # ---------------------------------------------------------------------
+        parquet_dir = Path(
+            "/Users/mac-DNGUYE52/PycharmProjects/des-tableau-python/parquet_files"
+        )
+        hyper_path = Path(
+            "/Users/mac-DNGUYE52/PycharmProjects/des-tableau-python/obt_sales_metrics__gmv_ordered_receipts.hyper"
+        )
+
         parquet_files = sorted(parquet_dir.glob("*.parquet"))
 
         # ---------------------------------------------------------------------
@@ -107,15 +103,19 @@ def main(cfg: ConfigWrapper, args: argparse.Namespace) -> None:
                 # - If the table does not exist yet: create it from the first parquet
                 # -----------------------------------------------------------------
                 for p in parquet_files:
-
                     parquet_name = p.name
+
                     logger.info("Starting parquet ingestion: %s", parquet_name)
+
                     p_sql = escape_string_literal(str(p.resolve()))
 
                     try:
                         connection.execute_command(
                             f"INSERT INTO {schema_table} "
                             f"(SELECT * FROM external({p_sql}, FORMAT => 'parquet'))"
+                        )
+                        logger.info(
+                            "Parquet file appended successfully: %s", parquet_name
                         )
 
                     except Exception:
@@ -127,4 +127,4 @@ def main(cfg: ConfigWrapper, args: argparse.Namespace) -> None:
                             "Parquet file used to create Hyper table: %s", parquet_name
                         )
 
-    logger.info(f"Script finished: {args.script}")
+    logger.info("Script finished: generate_hyper")

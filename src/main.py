@@ -17,7 +17,7 @@ from src.utils.logging_setup import setup_logging
 from src.wrapper.config import ConfigWrapper
 from src.wrapper.tableau_wrapper import TableauClient
 
-ScriptFn = Callable[[TableauClient, ConfigWrapper, argparse.Namespace], None]
+ScriptFn = Callable[[ConfigWrapper, argparse.Namespace], None]
 logger = logging.getLogger(__name__)
 
 
@@ -52,9 +52,7 @@ def main() -> int:
         print(f"No script found: {args.script}", file=sys.stderr)
         return 2
 
-    # One shared Tableau session for the whole run
-    with TableauClient() as tsc:
-        script_fn(tsc, cfg, args)
+    script_fn(cfg, args)
 
     return 0
 
