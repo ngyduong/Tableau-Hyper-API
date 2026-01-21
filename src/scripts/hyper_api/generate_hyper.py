@@ -21,74 +21,94 @@ logger = logging.getLogger(__name__)
 
 
 def main(tsc: TableauClient, cfg: ConfigWrapper, args: argparse.Namespace) -> None:
+    """
+    Generate a Tableau Hyper file
+
+    Workflow:
+    1. Read a source file (CSV in this example)
+    2. Export it to parquet (intermediate format)
+    3. Create or reuse a Hyper file
+    4. Create the schema/table if needed
+    5. Insert parquet data into the Hyper table
+    """
+
     logger.info("Starting script: generate_hyper")
 
     with log_duration("generate_hyper"):
+
+        # ---------------------------------------------------------------------
+        # Create temporary directories used to store parquet files and the hyper file
+        # These folders are created if they do not already exist
+        # ---------------------------------------------------------------------
         parquet_dir = Path("temp/pokemon/generate_hyper/parquet_files")
         parquet_dir.mkdir(parents=True, exist_ok=True)
 
-        tmp_parquet_file = parquet_dir / "pokemon.parquet"
+        hyper_path = Path("temp/pokemon/generate_hyper/hyper_file/pokemon.hyper")
+        hyper_path.parent.mkdir(parents=True, exist_ok=True)
 
-        hyper_dir = Path("temp/pokemon/generate_hyper/hyper_file")
-        hyper_dir.mkdir(parents=True, exist_ok=True)
-        tmp_hyper_file = hyper_dir / "pokemon.hyper"
+        # ---------------------------------------------------------------------
+        # Read the source data into a pandas DataFrame
+        # In this example we read a CSV, but any format supported by pandas
+        # (JSON, Excel, etc.) could be used here
+        # ---------------------------------------------------------------------
+        df = pd.read_csv("sample_data/pokemon.csv", encoding="utf-8")
 
-        with log_duration("read_csv"):
-            df = pd.read_csv(
-                "sample_data/pokemon.csv", sep=",", encoding="utf-8", header=0
-            )
+        # Export the DataFrame to parquet.
+        # Parquet is used as an intermediate format because it is columnar,
+        # fast to read, and natively supported by the Hyper `external()` function.
+        parquet_path = parquet_dir / "pokemon.parquet"
+        df.to_parquet(parquet_path, index=False)
 
-        with log_duration("write_parquet"):
-            df.to_parquet(tmp_parquet_file, index=False)
+        # ---------------------------------------------------------------------
+        # Collect all parquet files that should be loaded into the Hyper file
+        # Files are sorted to ensure deterministic loading order
+        # ---------------------------------------------------------------------
+        parquet_files = sorted(parquet_dir.glob("*.parquet"))
 
-        schema_name = "Extract"
-        table_name = "Extract"
-        schema_table = f'"{schema_name}"."{table_name}"'
-
-        parquet_files = sorted(
-            [p for p in parquet_dir.iterdir() if p.is_file() and p.suffix == ".parquet"]
-        )
-        if not parquet_files:
-            raise RuntimeError(f"No parquet files found in {parquet_dir}")
-
+        # ---------------------------------------------------------------------
+        # Start the Hyper process and open a connection to the Hyper file
+        # CREATE_IF_NOT_EXISTS ensures we reuse the file if it already exists
+        # ---------------------------------------------------------------------
         with HyperProcess(telemetry=Telemetry.SEND_USAGE_DATA_TO_TABLEAU) as hyper:
             with Connection(
                 endpoint=hyper.endpoint,
-                database=str(tmp_hyper_file),
+                database=str(hyper_path),
                 create_mode=CreateMode.CREATE_IF_NOT_EXISTS,
             ) as connection:
 
-                # ✅ Idempotent schema creation
+                # -----------------------------------------------------------------
+                # Define the schema and table name.
+                # Tableau extracts conventionally use Extract.Extract
+                # -----------------------------------------------------------------
+                schema_name = "Extract"
+                table_name = "Extract"
+                schema_table = f'"{schema_name}"."{table_name}"'
+
+                # Ensure the schema exists (idempotent operation)
                 connection.execute_command(
                     f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'
                 )
 
-                # ✅ Check whether the table already exists in the hyper file
-                existing_tables = {
-                    t.name.unescaped
-                    for t in connection.catalog.get_table_names(schema_name)
-                }
-                table_exists = table_name in existing_tables
+                # -----------------------------------------------------------------
+                # Load parquet data into the Hyper file
+                #
+                # - If the table already exists: append data (INSERT)
+                # - If the table does not exist yet: create it from the first parquet
+                # -----------------------------------------------------------------
+                for p in parquet_files:
+                    p_sql = escape_string_literal(str(p.resolve()))
 
-                for i, parquet_file in enumerate(parquet_files):
-                    parquet_sql_path = escape_string_literal(
-                        str(parquet_file.resolve())
-                    )
-
-                    if (not table_exists) and i == 0:
-                        # Create table from the first parquet
-                        query = (
-                            f"CREATE TABLE {schema_table} AS "
-                            f"(SELECT * FROM external({parquet_sql_path}, FORMAT => 'parquet'))"
-                        )
-                        table_exists = True
-                    else:
-                        # Append rows
-                        query = (
+                    try:
+                        # Append data if the table already exists
+                        connection.execute_command(
                             f"INSERT INTO {schema_table} "
-                            f"(SELECT * FROM external({parquet_sql_path}, FORMAT => 'parquet'))"
+                            f"(SELECT * FROM external({p_sql}, FORMAT => 'parquet'))"
                         )
-
-                    connection.execute_command(query)
+                    except Exception:
+                        # If the table does not exist yet, create it from this parquet
+                        connection.execute_command(
+                            f"CREATE TABLE {schema_table} AS "
+                            f"(SELECT * FROM external({p_sql}, FORMAT => 'parquet'))"
+                        )
 
     logger.info("Script finished: generate_hyper")
