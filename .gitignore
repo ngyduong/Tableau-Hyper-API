@@ -6,7 +6,9 @@ __pycache__/
 .env
 .venv/
 venv/
+temp/
 
 # OS
 .DS_Store
 .idea/
+hyperd.log
