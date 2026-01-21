@@ -24,30 +24,71 @@ def main(tsc: TableauClient, cfg: ConfigWrapper, args: argparse.Namespace) -> No
     logger.info("Starting script: generate_hyper")
 
     with log_duration("generate_hyper"):
+        parquet_dir = Path("temp/pokemon/generate_hyper/parquet_files")
+        parquet_dir.mkdir(parents=True, exist_ok=True)
 
-        tmp_parquet = Path("temp/generate_hyper/pokemon.parquet")
-        tmp_parquet.parent.mkdir(parents=True, exist_ok=True)
+        tmp_parquet_file = parquet_dir / "pokemon.parquet"
 
-        df = pd.read_csv("sample_data/pokemon.csv", sep=",", encoding="utf-8", header=0)
-        df.to_parquet(tmp_parquet, index=False)
+        hyper_dir = Path("temp/pokemon/generate_hyper/hyper_file")
+        hyper_dir.mkdir(parents=True, exist_ok=True)
+        tmp_hyper_file = hyper_dir / "pokemon.hyper"
+
+        with log_duration("read_csv"):
+            df = pd.read_csv(
+                "sample_data/pokemon.csv", sep=",", encoding="utf-8", header=0
+            )
+
+        with log_duration("write_parquet"):
+            df.to_parquet(tmp_parquet_file, index=False)
 
         schema_name = "Extract"
         table_name = "Extract"
+        schema_table = f'"{schema_name}"."{table_name}"'
+
+        parquet_files = sorted(
+            [p for p in parquet_dir.iterdir() if p.is_file() and p.suffix == ".parquet"]
+        )
+        if not parquet_files:
+            raise RuntimeError(f"No parquet files found in {parquet_dir}")
 
         with HyperProcess(telemetry=Telemetry.SEND_USAGE_DATA_TO_TABLEAU) as hyper:
             with Connection(
                 endpoint=hyper.endpoint,
-                database="temp/generate_hyper/pokemon.hyper",
-                create_mode=CreateMode.CREATE_AND_REPLACE,
+                database=str(tmp_hyper_file),
+                create_mode=CreateMode.CREATE_IF_NOT_EXISTS,
             ) as connection:
 
-                connection.catalog.create_schema(schema_name)
-                schema_table = f'"{schema_name}"."{table_name}"'
-
-                query = (
-                    f"CREATE TABLE {schema_table} AS "
-                    f"(SELECT * FROM external({escape_string_literal(str(tmp_parquet.resolve()))}, FORMAT => 'parquet'))"
+                # ✅ Idempotent schema creation
+                connection.execute_command(
+                    f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'
                 )
-                connection.execute_command(query)
+
+                # ✅ Check whether the table already exists in the hyper file
+                existing_tables = {
+                    t.name.unescaped
+                    for t in connection.catalog.get_table_names(schema_name)
+                }
+                table_exists = table_name in existing_tables
+
+                for i, parquet_file in enumerate(parquet_files):
+                    parquet_sql_path = escape_string_literal(
+                        str(parquet_file.resolve())
+                    )
+
+                    if (not table_exists) and i == 0:
+                        # Create table from the first parquet
+                        query = (
+                            f"CREATE TABLE {schema_table} AS "
+                            f"(SELECT * FROM external({parquet_sql_path}, FORMAT => 'parquet'))"
+                        )
+                        table_exists = True
+                    else:
+                        # Append rows
+                        query = (
+                            f"INSERT INTO {schema_table} "
+                            f"(SELECT * FROM external({parquet_sql_path}, FORMAT => 'parquet'))"
+                        )
+
+                    connection.execute_command(query)
 
     logger.info("Script finished: generate_hyper")
