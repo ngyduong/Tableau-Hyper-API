@@ -23,6 +23,13 @@ class TabCredentials:
     api_version: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class DatabricksCredentials:
+    databricks_server_hostname: str
+    databricks_http_path: str
+    databricks_token: str
+
+
 class ConfigWrapper(metaclass=Singleton):
     """
     Centralised config access.
@@ -36,6 +43,11 @@ class ConfigWrapper(metaclass=Singleton):
             site_id=os.getenv("tab_site_id", ""),
             site_url=os.getenv("tab_site_url", ""),
             api_version=os.getenv("tab_api_version", ""),
+        )
+        self._databricks_cred = DatabricksCredentials(
+            databricks_server_hostname=os.getenv("databricks_server_hostname", ""),
+            databricks_http_path=os.getenv("databricks_http_path", ""),
+            databricks_token=os.getenv("databricks_token", ""),
         )
 
     @property
@@ -51,3 +63,15 @@ class ConfigWrapper(metaclass=Singleton):
         ]
         if missing:
             raise ValueError(f"Missing Tableau config vars: {missing}")
+
+    @property
+    def databricks_cred(self) -> DatabricksCredentials:
+        self._validate_databricks()
+        return self._databricks_cred
+
+    def _validate_databricks(self) -> None:
+        missing = [
+            name for name, value in vars(self._databricks_cred).items() if not value
+        ]
+        if missing:
+            raise ValueError(f"Missing Databricks config vars: {missing}")
