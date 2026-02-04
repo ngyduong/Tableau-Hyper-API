@@ -42,11 +42,11 @@ def main(cfg: ConfigWrapper, args: argparse.Namespace) -> None:
 
     query = """
     SELECT * 
-    FROM hive_metastore.dev_des.creator_queue
+    FROM your_schema.your_database.your_table
     limit 10
     """
 
-    hyper_filename = "creator_queue"
+    hyper_filename = "your_table"
 
     with log_duration(args.script):
 
