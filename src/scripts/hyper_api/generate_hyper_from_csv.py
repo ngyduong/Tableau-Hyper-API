@@ -22,14 +22,18 @@ logger = logging.getLogger(__name__)
 
 def main(cfg: ConfigWrapper, args: argparse.Namespace) -> None:
     """
-    Generate a Tableau Hyper file
+    Generate a Tableau Hyper file from CSV data.
 
     Workflow:
-    1. Read a source file (CSV in this example)
-    2. Export it to parquet (intermediate format)
-    3. Create or reuse a Hyper file
-    4. Create the schema/table if needed
-    5. Insert parquet data into the Hyper table
+        1. Read source data from a CSV file
+        2. Export data to Parquet format (intermediate format)
+        3. Create or reuse a Hyper file
+        4. Create the schema/table if needed
+        5. Insert Parquet data into the Hyper table
+
+    Args:
+        cfg: Configuration wrapper containing environment settings.
+        args: Command-line arguments containing script name.
     """
 
     logger.info(f"Starting script: {args.script}")
@@ -37,17 +41,16 @@ def main(cfg: ConfigWrapper, args: argparse.Namespace) -> None:
     with log_duration(args.script):
 
         # ---------------------------------------------------------------------
-        # Source file definition
-        # In this example, we use a local CSV file from the folder sample_data.
-        # Any file readable by pandas (CSV, JSON, Excel, etc.) could be used here
-        # as long as an absolute or valid relative path is provided.
+        # Source file configuration
+        # Define the CSV file to be processed. Any pandas-readable format
+        # (CSV, JSON, Excel, etc.) can be used with an absolute or relative path.
         # ---------------------------------------------------------------------
         csv_filepath = "sample_data/pokemon.csv"
         csv_filename = re.search(r"(?<=/)[^/]+(?=\.csv$)", csv_filepath).group()
 
         # ---------------------------------------------------------------------
-        # Create temporary directories used to store parquet files and the hyper file
-        # These folders are created if they do not already exist
+        # Create temporary directories for Parquet files and Hyper file
+        # Directories are created if they do not already exist
         # ---------------------------------------------------------------------
         parquet_dir = Path(f"temp/{csv_filename}/{args.script}/parquet_files")
         parquet_dir.mkdir(parents=True, exist_ok=True)
@@ -58,27 +61,28 @@ def main(cfg: ConfigWrapper, args: argparse.Namespace) -> None:
         hyper_path.parent.mkdir(parents=True, exist_ok=True)
 
         # ---------------------------------------------------------------------
-        # Read the source data into a pandas DataFrame
-        # In this example we read a CSV, but any format supported by pandas
-        # (JSON, Excel, etc.) could be used here
+        # Read source data into a pandas DataFrame
+        # Any pandas-supported format (CSV, JSON, Excel, etc.) can be used
         # ---------------------------------------------------------------------
         df = pd.read_csv(csv_filepath, encoding="utf-8")
 
-        # Export the DataFrame to parquet.
-        # Parquet is used as an intermediate format because it is columnar,
-        # fast to read, and natively supported by the Hyper `external()` function.
+        # ---------------------------------------------------------------------
+        # Export DataFrame to Parquet format
+        # Parquet is used as intermediate format because it is columnar,
+        # fast to read, and natively supported by Hyper's external() function
+        # ---------------------------------------------------------------------
         parquet_path = parquet_dir / f"{csv_filename}.parquet"
         df.to_parquet(parquet_path, index=False)
 
         # ---------------------------------------------------------------------
-        # Collect all parquet files that should be loaded into the Hyper file
+        # Collect all Parquet files to be loaded into the Hyper file
         # Files are sorted to ensure deterministic loading order
         # ---------------------------------------------------------------------
         parquet_files = sorted(parquet_dir.glob("*.parquet"))
 
         # ---------------------------------------------------------------------
-        # Start the Hyper process and open a connection to the Hyper file
-        # CREATE_IF_NOT_EXISTS ensures we reuse the file if it already exists
+        # Start Hyper process and open connection to the Hyper file
+        # CREATE_IF_NOT_EXISTS mode reuses the file if it already exists
         # ---------------------------------------------------------------------
         with HyperProcess(telemetry=Telemetry.SEND_USAGE_DATA_TO_TABLEAU) as hyper:
             with Connection(
@@ -88,23 +92,22 @@ def main(cfg: ConfigWrapper, args: argparse.Namespace) -> None:
             ) as connection:
 
                 # -----------------------------------------------------------------
-                # Define the schema and table name.
-                # Tableau extracts conventionally use Extract.Extract
+                # Define schema and table name
+                # Tableau extracts conventionally use Extract.Extract as default
                 # -----------------------------------------------------------------
                 schema_name = "Extract"
                 table_name = "Extract"
                 schema_table = f'"{schema_name}"."{table_name}"'
 
-                # Ensure the schema exists (idempotent operation)
+                # Ensure schema exists (idempotent operation)
                 connection.execute_command(
                     f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'
                 )
 
                 # -----------------------------------------------------------------
-                # Load parquet data into the Hyper file
-                #
-                # - If the table already exists: append data (INSERT)
-                # - If the table does not exist yet: create it from the first parquet
+                # Load Parquet data into the Hyper file
+                # - If table exists: Append data (INSERT)
+                # - If table does not exist: Create it from the first Parquet file
                 # -----------------------------------------------------------------
                 for p in parquet_files:
 

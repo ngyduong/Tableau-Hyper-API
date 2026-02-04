@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from typing import Any, Callable, List
 
 import tableauserverclient as TSC
@@ -75,7 +74,7 @@ class TableauClient:
 
         return items
 
-    # ---------- Common helpers ----------
+    # ---------- Functions ----------
 
     def publish_datasources(self, server, filepath, project_luid, mode):
         new_datasource = TSC.DatasourceItem(project_luid)
